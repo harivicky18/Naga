@@ -1,0 +1,313 @@
+# Payment Gateway - Docker Setup Guide
+
+## Prerequisites
+
+- Docker Desktop installed (Windows/Mac) or Docker Engine (Linux)
+- Docker Compose installed (comes with Docker Desktop)
+- At least 4GB RAM available for Docker
+
+## Project Structure
+
+```
+payment-gateway/
+├── docker-compose.yml
+├── .env
+├── backend/
+│   ├── django_app/
+│   │   ├── Dockerfile
+│   │   ├── requirements.txt
+│   │   └── ... (Django files)
+│   └── fastapi_app/
+│       ├── Dockerfile
+│       ├── requirements.txt
+│       └── main.py
+└── frontend/
+    ├── Dockerfile
+    ├── nginx.conf
+    ├── .env.production
+    └── ... (React files)
+```
+
+## Step-by-Step Setup
+
+### Step 1: Clone/Setup Project Files
+
+Make sure all files are in place as per the structure above.
+
+### Step 2: Build and Start Services
+
+```bash
+# Navigate to project root
+cd payment-gateway
+
+# Build all services (first time)
+docker-compose build
+
+# Start all services
+docker-compose up -d
+
+# Or build and start in one command
+docker-compose up -d --build
+```
+
+### Step 3: Wait for Services to Start
+
+Check service status:
+```bash
+docker-compose ps
+```
+
+All services should show "Up" status.
+
+### Step 4: Create Django Superuser
+
+```bash
+# Access Django container
+docker-compose exec django python manage.py createsuperuser
+
+# Follow prompts:
+# Username: admin
+# Email: admin@payment.com
+# Password: admin123
+```
+
+### Step 5: Access the Application
+
+- **Frontend (React)**: http://localhost
+- **Django Admin**: http://localhost:8000/admin
+- **Django API**: http://localhost:8000/api
+- **FastAPI**: http://localhost:8001
+- **FastAPI Docs**: http://localhost:8001/docs
+
+## Common Commands
+
+### View Logs
+
+```bash
+# All services
+docker-compose logs -f
+
+# Specific service
+docker-compose logs -f django
+docker-compose logs -f fastapi
+docker-compose logs -f frontend
+docker-compose logs -f mysql
+```
+
+### Stop Services
+
+```bash
+# Stop all services
+docker-compose stop
+
+# Stop and remove containers
+docker-compose down
+
+# Stop and remove containers + volumes (deletes database!)
+docker-compose down -v
+```
+
+### Restart Services
+
+```bash
+# Restart all
+docker-compose restart
+
+# Restart specific service
+docker-compose restart django
+docker-compose restart fastapi
+docker-compose restart frontend
+```
+
+### Run Django Commands
+
+```bash
+# Make migrations
+docker-compose exec django python manage.py makemigrations
+
+# Run migrations
+docker-compose exec django python manage.py migrate
+
+# Create superuser
+docker-compose exec django python manage.py createsuperuser
+
+# Shell
+docker-compose exec django python manage.py shell
+```
+
+### Access Container Shell
+
+```bash
+# Django
+docker-compose exec django sh
+
+# FastAPI
+docker-compose exec fastapi sh
+
+# MySQL
+docker-compose exec mysql mysql -u payment_user -p
+# Password: payment_pass
+```
+
+### Rebuild After Code Changes
+
+```bash
+# Rebuild specific service
+docker-compose up -d --build django
+docker-compose up -d --build fastapi
+docker-compose up -d --build frontend
+
+# Rebuild all services
+docker-compose up -d --build
+```
+
+## Troubleshooting
+
+### Port Already in Use
+
+If ports 80, 8000, 8001, or 3306 are in use:
+
+```bash
+# Check what's using the port
+netstat -ano | findstr :80    # Windows
+lsof -i :80                   # Mac/Linux
+
+# Kill the process or change port in docker-compose.yml
+```
+
+### Database Connection Issues
+
+```bash
+# Check MySQL is running
+docker-compose logs mysql
+
+# Restart MySQL
+docker-compose restart mysql
+
+# Reset database
+docker-compose down -v
+docker-compose up -d
+```
+
+### Frontend Not Loading
+
+```bash
+# Rebuild frontend
+docker-compose up -d --build frontend
+
+# Check nginx logs
+docker-compose logs frontend
+```
+
+### Django Migrations Failed
+
+```bash
+# Access Django container
+docker-compose exec django sh
+
+# Run migrations manually
+python manage.py migrate
+
+# If still failing, reset migrations
+python manage.py migrate --fake
+python manage.py migrate
+```
+
+## Production Deployment
+
+### Environment Variables
+
+Update `.env` file for production:
+
+```bash
+DEBUG=False
+SECRET_KEY=your-super-secret-production-key
+ALLOWED_HOSTS=yourdomain.com,www.yourdomain.com
+
+# Stronger database password
+DB_PASSWORD=strong-random-password-here
+```
+
+### Security Checklist
+
+- [ ] Change all default passwords
+- [ ] Set DEBUG=False
+- [ ] Update SECRET_KEY
+- [ ] Configure ALLOWED_HOSTS
+- [ ] Enable HTTPS
+- [ ] Set up SSL certificates
+- [ ] Configure firewall rules
+- [ ] Regular backups of MySQL data
+
+## Backup and Restore
+
+### Backup Database
+
+```bash
+# Create backup
+docker-compose exec mysql mysqldump -u payment_user -ppayment_pass payment_gateway > backup.sql
+
+# Or using docker cp
+docker-compose exec mysql sh -c 'mysqldump -u payment_user -ppayment_pass payment_gateway' > backup.sql
+```
+
+### Restore Database
+
+```bash
+# Restore from backup
+docker-compose exec -T mysql mysql -u payment_user -ppayment_pass payment_gateway < backup.sql
+```
+
+## Monitoring
+
+### Resource Usage
+
+```bash
+# Container stats
+docker stats
+
+# Disk usage
+docker system df
+```
+
+### Health Checks
+
+```bash
+# Check all services
+docker-compose ps
+
+# Test endpoints
+curl http://localhost:8000/api/
+curl http://localhost:8001/health
+curl http://localhost/
+```
+
+## Clean Up
+
+```bash
+# Remove all containers, networks, and volumes
+docker-compose down -v
+
+# Remove all unused Docker resources
+docker system prune -a
+```
+
+## Support
+
+If you encounter issues:
+
+1. Check logs: `docker-compose logs -f`
+2. Verify all services are running: `docker-compose ps`
+3. Restart services: `docker-compose restart`
+4. Rebuild: `docker-compose up -d --build`
+
+## Test Credentials
+
+**Admin Login:**
+- Username: admin
+- Password: admin123
+
+**Test Cards:**
+1. Success: 4532015112830366 (CVV: 123, Expiry: 12/2025)
+2. Success: 5425233430109903 (CVV: 456, Expiry: 06/2026)
+3. Failed: 4111111111115678 (CVV: 789, Expiry: 09/2024)

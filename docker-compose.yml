@@ -1,0 +1,92 @@
+version: '3.8'
+
+services:
+  # MySQL Database
+  mysql:
+    image: mysql:8.0
+    container_name: payment_gateway_mysql
+    restart: always
+    environment:
+      MYSQL_ROOT_PASSWORD: root_password
+      MYSQL_DATABASE: payment_gateway
+      MYSQL_USER: payment_user
+      MYSQL_PASSWORD: payment_pass
+    ports:
+      - "3306:3306"
+    volumes:
+      - mysql_data:/var/lib/mysql
+    networks:
+      - payment_network
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]
+      timeout: 20s
+      retries: 10
+
+  # Django Backend
+  django:
+    build:
+      context: ./backend/django_app
+      dockerfile: Dockerfile
+    container_name: payment_gateway_django
+    restart: always
+    environment:
+      - DEBUG=True
+      - DB_ENGINE=django.db.backends.mysql
+      - DB_NAME=payment_gateway
+      - DB_USER=payment_user
+      - DB_PASSWORD=payment_pass
+      - DB_HOST=mysql
+      - DB_PORT=3306
+    ports:
+      - "8000:8000"
+    depends_on:
+      mysql:
+        condition: service_healthy
+    volumes:
+      - ./backend/django_app:/app
+    networks:
+      - payment_network
+    command: >
+      sh -c "python manage.py migrate &&
+             python manage.py collectstatic --noinput &&
+             python manage.py runserver 0.0.0.0:8000"
+
+  # FastAPI Payment Processor
+  fastapi:
+    build:
+      context: ./backend/fastapi_app
+      dockerfile: Dockerfile
+    container_name: payment_gateway_fastapi
+    restart: always
+    environment:
+      - DJANGO_API_URL=http://django:8000/api
+    ports:
+      - "8001:8001"
+    depends_on:
+      - django
+    volumes:
+      - ./backend/fastapi_app:/app
+    networks:
+      - payment_network
+
+  # React Frontend
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: payment_gateway_frontend
+    restart: always
+    ports:
+      - "80:80"
+    depends_on:
+      - django
+      - fastapi
+    networks:
+      - payment_network
+
+volumes:
+  mysql_data:
+
+networks:
+  payment_network:
+    driver: bridge

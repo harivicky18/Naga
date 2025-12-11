@@ -1,0 +1,11 @@
+# Navigate to project root
+cd payment-gateway
+
+# Build all services (first time)
+docker-compose build
+
+# Start all services
+docker-compose up -d
+
+# Or build and start in one command
+docker-compose up -d --build
